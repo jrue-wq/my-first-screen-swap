@@ -415,6 +415,8 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 /* ─── Row Action Button ─── */
+.row-action-wrap { position: relative; display: inline-flex; justify-content: flex-end; }
+
 .row-action {
   width: 34px;
   height: 34px;
@@ -428,11 +430,57 @@ tbody tr:last-child td { border-bottom: none; }
   align-items: center;
   justify-content: center;
 }
-.row-action:hover {
+.row-action:hover,
+.row-action.open {
   background: var(--secondary-gray-300);
   color: var(--brand-500);
 }
 .row-action .material-icons { font-size: 20px; }
+
+/* ─── Kebab Dropdown ─── */
+.row-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(112, 144, 176, 0.18), 0 1px 4px rgba(112, 144, 176, 0.1);
+  z-index: 100;
+  overflow: hidden;
+  animation: dropIn 0.15s ease;
+}
+.row-dropdown.open { display: block; }
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  letter-spacing: var(--tracking-normal);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.dropdown-item:hover { background: var(--secondary-gray-300); }
+.dropdown-item .material-icons { font-size: 17px; color: var(--secondary-gray-600); }
+.dropdown-item.danger { color: var(--status-error); }
+.dropdown-item.danger .material-icons { color: var(--status-error); }
+.dropdown-item.danger:hover { background: var(--status-error-bg); }
+.dropdown-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
 
 /* ─── Empty State ─── */
 .empty-state {
@@ -807,17 +855,40 @@ tbody tr:last-child td { border-bottom: none; }
             '<div class="track"><div class="fill" style="width:' + row.progress + '%"></div></div>' +
           '</div>' +
         '</td>' +
-        // Action button
+        // Action button + dropdown
         '<td style="text-align:right">' +
-          '<button class="row-action" aria-label="More options for ' + escapeHtml(row.name) + '">' +
-            '<span class="material-icons">more_horiz</span>' +
-          '</button>' +
+          '<div class="row-action-wrap">' +
+            '<button class="row-action" aria-label="More options for ' + escapeHtml(row.name) + '" data-id="' + row.id + '">' +
+              '<span class="material-icons">more_horiz</span>' +
+            '</button>' +
+            '<div class="row-dropdown" id="dropdown-' + row.id + '">' +
+              '<button class="dropdown-item"><span class="material-icons">account_circle</span>View Profile</button>' +
+              '<button class="dropdown-item"><span class="material-icons">edit</span>Edit</button>' +
+              '<div class="dropdown-divider"></div>' +
+              '<button class="dropdown-item danger"><span class="material-icons">delete_outline</span>Delete</button>' +
+            '</div>' +
+          '</div>' +
         '</td>' +
       '</tr>';
     }).join('');
 
     var tbody = document.getElementById('tbody');
     tbody.innerHTML = html;
+
+    // Kebab dropdown handlers
+    tbody.querySelectorAll('.row-action').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = btn.dataset.id;
+        var dropdown = document.getElementById('dropdown-' + id);
+        var isOpen = dropdown.classList.contains('open');
+        closeAllDropdowns();
+        if (!isOpen) {
+          dropdown.classList.add('open');
+          btn.classList.add('open');
+        }
+      });
+    });
 
     // Row checkbox handlers
     tbody.querySelectorAll('.row-chk').forEach(function (chk) {
@@ -1011,6 +1082,17 @@ tbody tr:last-child td { border-bottom: none; }
   // Add Member (placeholder)
   document.getElementById('addBtn').addEventListener('click', function () {
     alert('Add Member — connect your backend here!');
+  });
+
+  /* ─── Dropdown helpers ─── */
+  function closeAllDropdowns() {
+    document.querySelectorAll('.row-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
+    document.querySelectorAll('.row-action.open').forEach(function (b) { b.classList.remove('open'); });
+  }
+
+  document.addEventListener('click', closeAllDropdowns);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeAllDropdowns();
   });
 
   /* ─── Boot ─── */
