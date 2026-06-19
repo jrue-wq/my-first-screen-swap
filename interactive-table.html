@@ -562,9 +562,127 @@ tbody tr:last-child td { border-bottom: none; }
 .pg:disabled { opacity: 0.4; cursor: not-allowed; }
 .pg .material-icons { font-size: 18px; }
 
+/* ─── Viz + Activity Row ─── */
+.insights {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.insight-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  overflow: hidden;
+}
+.insight-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin-bottom: 4px;
+}
+.insight-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--secondary-gray-600);
+  margin-bottom: 20px;
+}
+
+/* Chart */
+.chart-wrap { position: relative; width: 100%; }
+.chart-wrap svg { width: 100%; display: block; }
+.chart-legend {
+  display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--secondary-gray-700);
+}
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+
+/* Activity Log */
+.activity-list { display: flex; flex-direction: column; gap: 0; overflow-y: auto; max-height: 320px; }
+.activity-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.activity-item:last-child { border-bottom: none; }
+.act-av {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 700;
+}
+.act-body { flex: 1; min-width: 0; }
+.act-text {
+  font-size: 13px; font-weight: 600; color: var(--text-heading);
+  line-height: 1.4;
+}
+.act-text span { color: var(--secondary-gray-600); font-weight: 500; }
+.act-time {
+  font-size: 12px; font-weight: 500;
+  color: var(--secondary-gray-500); margin-top: 3px;
+}
+.act-icon-wrap {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 3px;
+}
+.act-icon-wrap .material-icons { font-size: 15px; }
+
+/* ─── Status Tiles ─── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.tile {
+  background: var(--surface-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.tile-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tile-icon .material-icons { font-size: 24px; }
+.tile-body { min-width: 0; }
+.tile-count {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-heading);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.tile-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--secondary-gray-600);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
 /* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .insights { grid-template-columns: 1fr; }
+}
 @media (max-width: 768px) {
   body { padding: 24px 16px; }
+  .tiles { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .toolbar { gap: 12px; }
   .search { width: 100%; order: 3; }
   .toolbar .title { font-size: 18px; }
@@ -582,6 +700,26 @@ tbody tr:last-child td { border-bottom: none; }
   <div class="page-head">
     <div class="crumb">Pages / Data Tables</div>
     <div class="page-title">Team Members</div>
+  </div>
+
+  <!-- Status Tiles -->
+  <div class="tiles" id="tiles"></div>
+
+  <!-- Visualization + Activity -->
+  <div class="insights">
+    <div class="insight-card">
+      <div class="insight-title">Team Growth</div>
+      <div class="insight-sub">Cumulative members joined over time</div>
+      <div class="chart-wrap">
+        <svg id="growthChart" height="220" viewBox="0 0 700 220" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="chart-legend" id="chartLegend"></div>
+    </div>
+    <div class="insight-card">
+      <div class="insight-title">Recent Activity</div>
+      <div class="insight-sub">Latest team events</div>
+      <div class="activity-list" id="activityList"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -999,7 +1137,133 @@ tbody tr:last-child td { border-bottom: none; }
   }
 
   /* ─── Main render ─── */
+  /* ─── Render: Growth chart (SVG area) ─── */
+  function renderChart() {
+    var W = 700, H = 220, PL = 40, PR = 20, PT = 16, PB = 40;
+    var cW = W - PL - PR, cH = H - PT - PB;
+
+    // Aggregate cumulative joins by year
+    var yearMap = {};
+    ROWS.forEach(function (r) {
+      var y = new Date(r.date).getFullYear();
+      yearMap[y] = (yearMap[y] || 0) + 1;
+    });
+    var years = Object.keys(yearMap).map(Number).sort();
+    var cumul = [], tot = 0;
+    years.forEach(function (y) { tot += yearMap[y]; cumul.push(tot); });
+
+    var minY = 0, maxY = tot;
+    var n = years.length;
+
+    function xPos(i) { return PL + (i / (n - 1)) * cW; }
+    function yPos(v) { return PT + cH - ((v - minY) / (maxY - minY)) * cH; }
+
+    // Grid lines
+    var gridCount = 4;
+    var grids = '';
+    for (var g = 0; g <= gridCount; g++) {
+      var val = Math.round((maxY / gridCount) * g);
+      var gy  = yPos(val);
+      grids += '<line x1="' + PL + '" y1="' + gy + '" x2="' + (W - PR) + '" y2="' + gy + '" stroke="#E0E5F2" stroke-width="1"/>';
+      grids += '<text x="' + (PL - 8) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="11" fill="#A3AED0" font-family="DM Sans, sans-serif">' + val + '</text>';
+    }
+
+    // Area path
+    var pts = years.map(function (y, i) { return xPos(i) + ',' + yPos(cumul[i]); });
+    var areaD = 'M' + xPos(0) + ',' + yPos(cumul[0]) + ' ' +
+      pts.slice(1).map(function (p, i) {
+        var x0 = xPos(i), x1 = xPos(i + 1);
+        var cp = (x1 - x0) * 0.45;
+        return 'C' + (x0 + cp) + ',' + yPos(cumul[i]) + ' ' + (x1 - cp) + ',' + yPos(cumul[i + 1]) + ' ' + x1 + ',' + yPos(cumul[i + 1]);
+      }).join(' ');
+    var fillD = areaD + ' L' + xPos(n - 1) + ',' + (PT + cH) + ' L' + PL + ',' + (PT + cH) + ' Z';
+
+    // Line path (same curve, no fill close)
+    var lineD = areaD;
+
+    // Dots + labels
+    var dots = years.map(function (y, i) {
+      return '<circle cx="' + xPos(i) + '" cy="' + yPos(cumul[i]) + '" r="5" fill="#422AFB" stroke="#fff" stroke-width="2"/>';
+    }).join('');
+    var xLabels = years.map(function (y, i) {
+      return '<text x="' + xPos(i) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="12" fill="#A3AED0" font-family="DM Sans, sans-serif" font-weight="600">' + y + '</text>';
+    }).join('');
+
+    var svg = document.getElementById('growthChart');
+    svg.innerHTML =
+      '<defs>' +
+        '<linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="#422AFB" stop-opacity="0.18"/>' +
+          '<stop offset="100%" stop-color="#422AFB" stop-opacity="0.01"/>' +
+        '</linearGradient>' +
+      '</defs>' +
+      grids +
+      '<path d="' + fillD + '" fill="url(#areaGrad)"/>' +
+      '<path d="' + lineD + '" fill="none" stroke="#422AFB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+      dots + xLabels;
+
+    document.getElementById('chartLegend').innerHTML =
+      '<div class="legend-item"><div class="legend-dot" style="background:#422AFB"></div>Cumulative members</div>' +
+      '<div class="legend-item" style="margin-left:auto;font-size:12px;color:var(--secondary-gray-600)">' + tot + ' total</div>';
+  }
+
+  /* ─── Render: Activity log ─── */
+  var ACTIVITIES = [
+    { name: 'Nadia Farouk',   av: AVATAR_COLORS[8 % AVATAR_COLORS.length],  icon: 'check_circle',   iconBg: '#E6FAF5', iconColor: '#01B574', action: 'completed onboarding',        time: '2 min ago' },
+    { name: 'Ibrahim Khan',   av: AVATAR_COLORS[12 % AVATAR_COLORS.length], icon: 'person_add',     iconBg: '#F2EFFF', iconColor: '#422AFB', action: 'joined the team',             time: '18 min ago' },
+    { name: 'Theo Lambert',   av: AVATAR_COLORS[7 % AVATAR_COLORS.length],  icon: 'edit',           iconBg: '#FFF6DA', iconColor: '#FFB547', action: 'updated their profile',       time: '1 hr ago' },
+    { name: 'Owen Brady',     av: AVATAR_COLORS[9 % AVATAR_COLORS.length],  icon: 'cancel',         iconBg: '#FEEFEE', iconColor: '#EE5D50', action: 'flagged with an error',       time: '2 hr ago' },
+    { name: 'Lena Cho',       av: AVATAR_COLORS[4 % AVATAR_COLORS.length],  icon: 'star',           iconBg: '#E6FAF5', iconColor: '#01B574', action: 'reached 78% onboarding',     time: '3 hr ago' },
+    { name: 'Marcus Hale',    av: AVATAR_COLORS[5 % AVATAR_COLORS.length],  icon: 'block',          iconBg: '#F4F7FE', iconColor: '#A3AED0', action: 'was set to Disabled',         time: '5 hr ago' },
+    { name: 'Priya Nair',     av: AVATAR_COLORS[6 % AVATAR_COLORS.length],  icon: 'check_circle',   iconBg: '#E6FAF5', iconColor: '#01B574', action: 'was approved',                time: 'Yesterday' },
+    { name: 'Sara Voss',      av: AVATAR_COLORS[2 % AVATAR_COLORS.length],  icon: 'hourglass_top',  iconBg: '#FFF6DA', iconColor: '#FFB547', action: 'is pending review',           time: 'Yesterday' }
+  ];
+
+  function renderActivity() {
+    document.getElementById('activityList').innerHTML = ACTIVITIES.map(function (a) {
+      var ini = a.name.split(' ').map(function (p) { return p[0]; }).join('').toUpperCase();
+      return '<div class="activity-item">' +
+        '<div class="act-av" style="background:' + a.av + '">' + ini + '</div>' +
+        '<div class="act-body">' +
+          '<div class="act-text">' + escapeHtml(a.name) + ' <span>' + escapeHtml(a.action) + '</span></div>' +
+          '<div class="act-time">' + a.time + '</div>' +
+        '</div>' +
+        '<div class="act-icon-wrap" style="background:' + a.iconBg + '">' +
+          '<span class="material-icons" style="color:' + a.iconColor + '">' + a.icon + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ─── Render: Status tiles ─── */
+  var TILE_META = {
+    Approved: { icon: 'check_circle',          bg: '#E6FAF5', color: '#01B574' },
+    Pending:  { icon: 'error_outline',         bg: '#FFF6DA', color: '#FFB547' },
+    Error:    { icon: 'cancel',                bg: '#FEEFEE', color: '#EE5D50' },
+    Disabled: { icon: 'remove_circle_outline', bg: '#F4F7FE', color: '#A3AED0' }
+  };
+
+  function renderTiles() {
+    var html = Object.keys(TILE_META).map(function (status) {
+      var meta  = TILE_META[status];
+      var count = ROWS.filter(function (r) { return r.status === status; }).length;
+      return '<div class="tile">' +
+        '<div class="tile-icon" style="background:' + meta.bg + '">' +
+          '<span class="material-icons" style="color:' + meta.color + '">' + meta.icon + '</span>' +
+        '</div>' +
+        '<div class="tile-body">' +
+          '<div class="tile-count">' + count + '</div>' +
+          '<div class="tile-label">' + status + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('tiles').innerHTML = html;
+  }
+
   function render() {
+    renderChart();
+    renderActivity();
+    renderTiles();
     renderTabs();
     renderSortHeaders();
 
